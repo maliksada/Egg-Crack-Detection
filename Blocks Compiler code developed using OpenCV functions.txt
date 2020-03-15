@@ -1,0 +1,138 @@
+#include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <iostream>
+#include <wiringPi.h>
+using namespace cv;
+using namespace std;
+int main()
+{
+Mat image,test;
+vector<Mat> rgb;
+int i,j,k;
+wiringPiSetup () ;
+pinMode (7, INPUT) ;
+pinMode (0, OUTPUT) ;
+pinMode (2, OUTPUT) ;
+pinMode (3, OUTPUT) ;
+namedWindow( "Original", WINDOW_NORMAL );
+namedWindow( "Result", WINDOW_NORMAL );
+Mat frame;
+while(1)
+{
+if (digitalRead(7)==HIGH)
+{
+VideoCapture cap(0); // open the video camera no. 0
+if(!cap.isOpened()) // if not success, exit program
+{
+cout << "Cannot open the video file" << endl;
+return -1;
+}
+cap.read(frame);
+j=0;
+while(j<3)//capture 3 images of 1 egg
+{
+switch(j)
+{
+case 0:
+imwrite(frame,"image1.jpg");
+break;
+case 1:
+imwrite(frame,"image2.jpg");
+break;
+case 2:
+imwrite(frame,"image3.jpg");
+break;
+default:
+cout<<"ERROR"<<endl;
+break;
+}
+digitalWrite (0, HIGH) ;
+Delay(500);//Time to rotate the egg 120 degree
+digitalWrite (0, LOW) ;
+}
+j=0;
+while(j<3)
+{
+switch(j)
+{
+case 0:
+image = imread("image1.jpg", CV_LOAD_IMAGE_COLOR);
+break;
+case 1:
+image = imread("image2.jpg", CV_LOAD_IMAGE_COLOR);
+break;
+case 2:
+image = imread("image3.jpg", CV_LOAD_IMAGE_COLOR);
+break;
+default:
+cout<<"ERROR"<<endl;
+break;
+}
+//image = imread(txt[j], CV_LOAD_IMAGE_COLOR);
+imshow("Original",image);
+imshow("Result",image);
+cvtColor(image, image, CV_BGR2YCrCb);
+imshow("Result",image);
+split(image, rgb);
+imshow("Result",rgb[2]);
+for(i=1;i<21;i=i+2)
+{
+medianBlur(rgb[2],rgb[2],i);
+}
+threshold(rgb[2],rgb[2],98,255,THRESH_TRUNC);
+imshow("Result",rgb[2]);
+adaptiveThreshold(rgb[2],image,200,ADAPTIVE_THRESH_GAUSSIAN_CTHRESH_BINARY_INV,255,0);
+threshold(image,image,0,255,THRESH_BINARY);
+threshold(image,test,0,255,THRESH_BINARY);
+imshow("Result",image);
+vector< vector<Point> > contours;
+findContours(image,contours,CV_RETR_TREE, CV_CHAIN_APPROX_NONE);
+Mat mask = Mat::zeros(image.rows, image.cols, CV_8UC1);
+vector<double> areas1(contours.size());
+cout<<contours.size()<<endl;
+for(int i = 1; i < contours.size()-1; i++)
+{
+areas1[i-1] = contourArea(Mat(contours[i]));
+cout<<i-1<<" "<<areas1[i-1]<<endl;
+}
+double max;
+Point maxPosition;
+minMaxLoc(Mat(areas1),0,&max,0,&maxPosition);
+k=maxPosition.y;
+if(k==contours.size())
+--k;
+cout<<k<<endl;
+drawContours(mask, contours,(k+1), Scalar(1), CV_FILLED);
+//drawContours(mask, contours,29, Scalar(1), CV_FILLED);
+normalize(mask.clone(), mask, 0.0, 255.0, CV_MINMAX, CV_8UC1);
+imshow("Result",mask);
+bitwise_and(test,mask,image);
+imshow("Result",image);
+imwrite("RESULTT.jpg",image);
+vector< vector<Point> > contours1;
+findContours(image,contours1,CV_RETR_TREE, CV_CHAIN_APPROX_NONE);
+cout<<contours.size()<<endl;
+Mat mask1 = Mat::zeros(mask.rows, mask.cols, CV_8UC1);
+vector<double> areas(contours.size());
+for(i = 0; i < contours.size(); i++)
+{
+areas[i] = contourArea(Mat(contours1[i]));
+//cout<<i<<" "<<areas[i]<<endl;
+if(areas[i]>1000&&areas[i]<9000)
+{
+cout<<"CRACKED"<<endl;
+digitalWrite (2, HIGH) ;
+Delay(500);//Set flag variable for rejection
+digitalWrite (2, LOW) ;
+break;}
+}
+++j;
+}
+digitalWrite (3, HIGH) ;
+Delay(500);//trigger pic for end of image processing
+digitalWrite (3, LOW) ;
+}
+}
+return 0;
+}
